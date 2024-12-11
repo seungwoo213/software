@@ -2,7 +2,7 @@
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const statusElem = document.getElementById('status');
-const dbValueElem = document.getElementById('dbValue');
+const dbElem = document.getElementById('dbValue');
 
 let audioContext;
 let analyser;
@@ -10,25 +10,10 @@ let microphone;
 let bufferLength;
 let dataArray;
 
-function calculateDecibels(dataArray) {
-    let sum = 0;
-
-    // RMS 계산
-    for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i] ** 2;
-    }
-    const rms = Math.sqrt(sum / dataArray.length);
-
-    // 기준 RMS 값 (조용한 상태의 RMS)
-    const referenceRMS = 10; // 적절한 기준값 설정 (실험적으로 조정)
-
-    // 데시벨 계산
-    const decibels = 20 * Math.log10(rms / referenceRMS);
-
-    return decibels.toFixed(2);
-}
-
-
+// 진동 감지 변수
+let lastAcceleration = { x: 0, y: 0, z: 0 }; // 이전 가속도
+let vibrationThreshold = 15; // 진동 감지 임계값
+let isVibrating = false;
 
 // 마이크와 사운드 분석 시작
 function startSoundAnalysis() {
@@ -60,6 +45,13 @@ function startSoundAnalysis() {
     } else {
         statusElem.textContent = "이 브라우저는 getUserMedia를 지원하지 않습니다.";
     }
+
+    // 진동 감지 시작
+    if (window.DeviceMotionEvent) {
+        window.addEventListener("devicemotion", handleDeviceMotion);
+    } else {
+        statusElem.textContent = "이 장치는 진동 감지를 지원하지 않습니다.";
+    }
 }
 
 // 주파수 데이터 분석 후 그래프 그리기
@@ -86,12 +78,32 @@ function draw() {
         x += barWidth + 1; // 다음 막대로 이동
     }
 
-    // 데시벨 계산 및 표시
-    const decibels = calculateDecibels(dataArray);
-    dbValueElem.textContent = `데시벨: ${decibels} dB`;
-
     // 애니메이션을 위해 계속 호출
     requestAnimationFrame(draw);
+}
+
+// 진동 감지 함수
+function handleDeviceMotion(event) {
+    const acceleration = event.accelerationIncludingGravity;
+    
+    // 가속도의 변화량을 측정
+    const deltaX = Math.abs(acceleration.x - lastAcceleration.x);
+    const deltaY = Math.abs(acceleration.y - lastAcceleration.y);
+    const deltaZ = Math.abs(acceleration.z - lastAcceleration.z);
+
+    // 진동 감지: 임계값을 초과하면 진동으로 감지
+    if (deltaX > vibrationThreshold || deltaY > vibrationThreshold || deltaZ > vibrationThreshold) {
+        if (!isVibrating) {
+            isVibrating = true;
+            statusElem.textContent = "상태: 진동 감지됨!";
+            console.log("진동 감지됨!");
+        }
+    } else {
+        isVibrating = false;
+    }
+
+    // 이전 가속도 업데이트
+    lastAcceleration = acceleration;
 }
 
 // 페이지 로드 후 사운드 분석 시작
